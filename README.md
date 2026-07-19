@@ -5,10 +5,15 @@
 
 ---
 
-## 🚀 The Vision
-Modern supply chains are incredibly fragile. When a supplier delays a shipment, or demand suddenly spikes, operations teams usually find out *after* the damage is done. 
+## 🚀 The Vision & Business Impact
+Modern supply chains are incredibly fragile. When a supplier delays a shipment or demand suddenly spikes, operations teams usually find out *after* the damage is done. This leads to massive revenue loss, stockouts, and emergency freight costs.
 
-**SupplySense** solves this by introducing a **Multi-Agent AI System** that constantly monitors supply chain data, predicts downstream impacts of delays, identifies high-risk suppliers, and autonomously proposes actionable solutions before critical stockouts occur.
+**SupplySense** solves this by introducing a **Multi-Agent AI System** that constantly monitors supply chain data, predicts downstream impacts of delays, identifies high-risk suppliers, and autonomously proposes actionable solutions before critical stockouts occur. 
+
+**Business Value:**
+- 📉 **Minimizes Stockouts:** Predicts shortages before they happen.
+- ⚡ **Reduces Resolution Time:** AI calculates alternative routes in seconds, not hours.
+- 🤝 **Improves Supplier Accountability:** Quantifies and flags hidden supplier risks.
 
 ---
 
@@ -56,9 +61,13 @@ cp .env.example .env
 ### 2. Start the Backend (Python / Flask)
 Open a terminal in the root directory:
 ```bash
-# Create and activate a virtual environment
+# Create a virtual environment
 python -m venv env
-env\Scripts\activate  # On Windows
+
+# Activate it (Windows)
+env\Scripts\activate
+# Activate it (Mac/Linux)
+source env/bin/activate
 
 # Install requirements
 pip install -r requirements.txt
@@ -84,7 +93,7 @@ npm run dev
 ---
 
 ## 🔮 Future Scope
-* **N8N Integration:** Fully autonomous workflows to automatically email alternate suppliers and reroute shipments without human intervention.
+* **N8N / Zapier Integration:** Fully autonomous workflows to automatically email alternate suppliers and reroute shipments without human intervention.
 * **IoT Sensor Integration:** Feeding live GPS and temperature data of shipments directly into the Agent's context window.
 * **ERP Sync:** Two-way sync with SAP or Oracle NetSuite.
 
