@@ -44,10 +44,7 @@ desktop.ini
 .vscode/
 .idea/
 
-# Database
-*.db
-*.sqlite3
-data/*.db
+# Database rules removed to allow uploading mock database for hackathon demo
 
 # Logs and test outputs (IMPORTANT: keeps keys out of git)
 *.log
