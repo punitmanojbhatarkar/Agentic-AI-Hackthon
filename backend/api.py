@@ -36,6 +36,7 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize agent: {e}")
     agent = None
+    agent_init_error = str(e)
 
 print("[OK] Flask app initialized successfully")
 
@@ -101,7 +102,7 @@ def demand_forecast():
 def run_sweep():
     """Run full intelligence sweep and return dashboard data."""
     if not agent:
-        return jsonify({"error": "Agent not initialized"}), 500
+        return jsonify({"error": "Agent not initialized", "details": getattr(sys.modules[__name__], "agent_init_error", "unknown")}), 500
     try:
         data_store = type('DataStore', (), {})()
         data_store.get_warehouse_ids = queries.get_all_warehouse_ids
@@ -135,7 +136,7 @@ def run_sweep():
 def query_agent():
     """Handle natural language supply chain questions."""
     if not agent:
-        return jsonify({"error": "Agent not initialized"}), 500
+        return jsonify({"error": "Agent not initialized", "details": getattr(sys.modules[__name__], "agent_init_error", "unknown")}), 500
     data = request.json
     question = data.get('question')
     if not question:
