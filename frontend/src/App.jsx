@@ -1067,17 +1067,17 @@ const AutoResolveModal = ({ sku, onClose }) => {
         </div>
         
         <div style={{ padding: 24, fontFamily: 'monospace', fontSize: 13, color: '#a7f3d0', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 250 }}>
-          <div className="fade-in" style={{ color: '#6ee7b7' }}>> Initializing Action Agent for SKU: {sku.sku_id}...</div>
+          <div className="fade-in" style={{ color: '#6ee7b7' }}>&gt; Initializing Action Agent for SKU: {sku.sku_id}...</div>
           
-          {step >= 1 && <div className="fade-in">> Analyzing supply chain graph to find alternate suppliers...</div>}
-          {step >= 1 && <div className="fade-in" style={{ color: '#34d399' }}>  ✓ Found 2 viable alternates with lead time < {sku.days_until_stockout} days.</div>}
+          {step >= 1 && <div className="fade-in">&gt; Analyzing supply chain graph to find alternate suppliers...</div>}
+          {step >= 1 && <div className="fade-in" style={{ color: '#34d399' }}>  ✓ Found 2 viable alternates with lead time &lt; {sku.days_until_stockout} days.</div>}
           
-          {step >= 2 && <div className="fade-in">> Drafting Purchase Order #PO-{Math.floor(Math.random()*10000)} for {sku.recommended_reorder_quantity || 500} units...</div>}
+          {step >= 2 && <div className="fade-in">&gt; Drafting Purchase Order #PO-{Math.floor(Math.random()*10000)} for {sku.recommended_reorder_quantity || 500} units...</div>}
           
-          {step >= 3 && <div className="fade-in">> Routing PO to Supplier SUP-VENDOR-B via EDI interface...</div>}
+          {step >= 3 && <div className="fade-in">&gt; Routing PO to Supplier SUP-VENDOR-B via EDI interface...</div>}
           {step >= 3 && <div className="fade-in" style={{ color: '#34d399' }}>  ✓ Transmission confirmed.</div>}
           
-          {step >= 4 && <div className="fade-in">> Updating internal ERP system and adjusting forecasted stock levels...</div>}
+          {step >= 4 && <div className="fade-in">&gt; Updating internal ERP system and adjusting forecasted stock levels...</div>}
           
           {step >= 5 && (
             <div className="fade-in" style={{

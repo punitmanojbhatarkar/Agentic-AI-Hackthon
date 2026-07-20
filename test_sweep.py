@@ -5,7 +5,7 @@ Verifies:
 1. Scans all SKUs for stockout risk
 2. Scans all suppliers for reliability risk
 3. Collects findings efficiently
-4. Single Bedrock call for executive summary
+4. Single Groq call for executive summary
 5. Returns proper structure with timestamp
 """
 
@@ -127,8 +127,8 @@ def create_mock_tools():
     }
 
 
-def create_mock_bedrock_client():
-    """Create mock Bedrock client for summary generation."""
+def create_mock_groq_client():
+    """Create mock Groq client for summary generation."""
     
     client = Mock()
     
@@ -158,7 +158,7 @@ def test_basic_sweep():
     
     # Create mock agent
     agent = Mock()
-    agent.bedrock_client = create_mock_bedrock_client()
+    agent.groq_client = create_mock_groq_client()
     
     # Run sweep
     result = run_intelligence_sweep(
@@ -191,7 +191,7 @@ def test_stockout_detection():
     print("="*80)
     
     agent = Mock()
-    agent.bedrock_client = create_mock_bedrock_client()
+    agent.groq_client = create_mock_groq_client()
     
     result = run_intelligence_sweep(
         agent=agent,
@@ -224,7 +224,7 @@ def test_supplier_detection():
     print("="*80)
     
     agent = Mock()
-    agent.bedrock_client = create_mock_bedrock_client()
+    agent.groq_client = create_mock_groq_client()
     
     result = run_intelligence_sweep(
         agent=agent,
@@ -253,7 +253,7 @@ def test_executive_summary():
     print("="*80)
     
     agent = Mock()
-    agent.bedrock_client = create_mock_bedrock_client()
+    agent.groq_client = create_mock_groq_client()
     
     result = run_intelligence_sweep(
         agent=agent,
@@ -286,7 +286,7 @@ def test_scan_stats():
     print("="*80)
     
     agent = Mock()
-    agent.bedrock_client = create_mock_bedrock_client()
+    agent.groq_client = create_mock_groq_client()
     
     result = run_intelligence_sweep(
         agent=agent,
@@ -304,9 +304,9 @@ def test_scan_stats():
     print(f"  - Critical issues: {stats['critical_count']}")
     print(f"  - High issues: {stats['high_count']}")
     print(f"  - Risky suppliers: {stats['risky_supplier_count']}")
-    print(f"  - Bedrock calls: {stats['bedrock_calls']}")
+    print(f"  - Groq calls: {stats['groq_calls']}")
     
-    assert stats["bedrock_calls"] == 1, "Should use exactly 1 Bedrock call for summary"
+    assert stats["groq_calls"] == 1, "Should use exactly 1 Groq call for summary"
     return True
 
 
@@ -317,7 +317,7 @@ def test_scheduled_sweep():
     print("="*80)
     
     agent = Mock()
-    agent.bedrock_client = create_mock_bedrock_client()
+    agent.groq_client = create_mock_groq_client()
     
     # Create scheduler
     sweep_fn = create_sweep_scheduler(
@@ -340,24 +340,24 @@ def test_scheduled_sweep():
 
 
 def test_efficiency():
-    """Test that sweep is efficient (single Bedrock call regardless of SKU/supplier count)."""
+    """Test that sweep is efficient (single Groq call regardless of SKU/supplier count)."""
     print("\n" + "="*80)
-    print("TEST 7: Efficiency (Single Bedrock Call)")
+    print("TEST 7: Efficiency (Single Groq Call)")
     print("="*80)
     
     agent = Mock()
-    bedrock_client = create_mock_bedrock_client()
-    agent.bedrock_client = bedrock_client
+    groq_client = create_mock_groq_client()
+    agent.groq_client = groq_client
     
     # Mock to track call count
-    original_invoke = bedrock_client.invoke_model
+    original_invoke = groq_client.invoke_model
     call_count = [0]
     
     def tracked_invoke(*args, **kwargs):
         call_count[0] += 1
         return original_invoke(*args, **kwargs)
     
-    bedrock_client.invoke_model = tracked_invoke
+    groq_client.invoke_model = tracked_invoke
     
     # Run sweep with many SKUs/suppliers
     result = run_intelligence_sweep(
@@ -369,10 +369,10 @@ def test_efficiency():
     )
     
     print(f"[OK] Efficiency test with 20 SKUs + 5 suppliers")
-    print(f"  - Bedrock calls: {call_count[0]}")
+    print(f"  - Groq calls: {call_count[0]}")
     print(f"  - Expected: 1 (summary only)")
     
-    assert call_count[0] == 1, f"Should use only 1 Bedrock call, used {call_count[0]}"
+    assert call_count[0] == 1, f"Should use only 1 Groq call, used {call_count[0]}"
     return True
 
 
@@ -389,7 +389,7 @@ def run_all_tests():
         ("Executive Summary Generation", test_executive_summary),
         ("Scan Statistics Tracking", test_scan_stats),
         ("Scheduled Sweep Wrapper", test_scheduled_sweep),
-        ("Efficiency (Single Bedrock Call)", test_efficiency),
+        ("Efficiency (Single Groq Call)", test_efficiency),
     ]
     
     passed = 0

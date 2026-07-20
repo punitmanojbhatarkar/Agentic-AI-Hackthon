@@ -26,17 +26,17 @@ def run_intelligence_sweep(
 
     This function performs autonomous, periodic monitoring without user prompts.
     It identifies critical inventory risks and supplier reliability issues,
-    then compiles findings into a single executive summary via Bedrock.
+    then compiles findings into a single executive summary via Groq.
 
     Execution flow:
     1. Scan all SKUs for stockout risk (critical/high level)
     2. Scan all suppliers for reliability risk (high category)
-    3. Compile findings into a single Bedrock call for executive summary
+    3. Compile findings into a single Groq call for executive summary
     4. Return structured results with timestamp
 
     Args:
-        agent: Initialized SupplyChainAgent instance (used for Bedrock client access).
-               Must have: .bedrock_client attribute
+        agent: Initialized SupplyChainAgent instance (used for Groq client access).
+               Must have: .groq_client attribute
         tool_functions: Mapping of tool names to callables.
                        Must contain: predict_stockout, supplier_risk_score
                        Example: {"predict_stockout": fn, "supplier_risk_score": fn, ...}
@@ -78,19 +78,19 @@ def run_intelligence_sweep(
                   "critical_count": int,
                   "high_count": int,
                   "risky_supplier_count": int,
-                  "bedrock_calls": int
+                  "groq_calls": int
               }
 
     Error Handling:
         - Missing tool functions: logs error, skips that scan phase
         - Tool execution failure: logs, records partial results, continues
         - Data store unavailable: returns fallback response with available data
-        - Bedrock call failure: returns summary without executive text
+        - Groq call failure: returns summary without executive text
 
     Requirements met:
         ✅ Full type hints (all parameters and return types)
         ✅ Comprehensive docstring (Args, Returns, Error Handling)
-        ✅ Efficient (single Bedrock call for summary, not per-item)
+        ✅ Efficient (single Groq call for summary, not per-item)
         ✅ Handles 20-30 SKUs/suppliers efficiently
         ✅ Proactive (no user prompt required)
         ✅ Executive-level output (3-bullet summary)
@@ -123,7 +123,7 @@ def run_intelligence_sweep(
         "critical_count": 0,
         "high_count": 0,
         "risky_supplier_count": 0,
-        "bedrock_calls": 0,
+        "groq_calls": 0,
     }
 
     # Get predict_stockout tool
@@ -311,7 +311,7 @@ def run_intelligence_sweep(
         logger.warning("Skipping Phase 2 (supplier_risk_score not available)")
 
     # =========================================================================
-    # PHASE 3: Compile executive summary via single Bedrock call
+    # PHASE 3: Compile executive summary via single Groq call
     # =========================================================================
     logger.info("Phase 3: Compiling executive summary")
 
@@ -324,6 +324,7 @@ def run_intelligence_sweep(
         # Use Groq to generate executive summary
         try:
             executive_summary = _generate_groq_summary(findings_text)
+            scan_stats['groq_calls'] += 1
             scan_stats["summary_generated"] = True
             logger.info("Executive summary generated via Groq")
 
@@ -356,7 +357,7 @@ def run_intelligence_sweep(
 
 def _build_findings_text(critical_stockouts: list[dict], risky_suppliers: list[dict]) -> str:
     """
-    Build a formatted findings text for Bedrock summarization.
+    Build a formatted findings text for Groq summarization.
 
     Args:
         critical_stockouts: List of SKUs at risk
@@ -436,7 +437,7 @@ def _generate_fallback_summary(
     risky_suppliers: list[dict],
 ) -> str:
     """
-    Generate a fallback executive summary when Bedrock is unavailable.
+    Generate a fallback executive summary when Groq is unavailable.
 
     Args:
         critical_stockouts: List of stockout risks
