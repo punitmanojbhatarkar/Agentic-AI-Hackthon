@@ -335,6 +335,141 @@ def remove_supplier(supplier_id):
 
 
 # ============================================================================
+# WHAT-IF SIMULATION ENGINE
+# ============================================================================
+
+@app.route('/api/simulate', methods=['POST'])
+def simulate():
+    """
+    Run a What-If scenario simulation.
+    Accepts: { type: 'demand_spike'|'supplier_delay', sku_id|supplier_id, multiplier }
+    Returns: before/after comparison with projected impact.
+    """
+    import os
+    data = request.json
+    scenario_type = data.get('type')
+
+    try:
+        if scenario_type == 'demand_spike':
+            sku_id = data.get('sku_id')
+            multiplier = float(data.get('multiplier', 1.5))
+            if not sku_id:
+                return jsonify({'error': 'sku_id required'}), 400
+
+            # Get real historical demand
+            demand_history = queries.get_demand_history(sku_id)
+            if not demand_history:
+                return jsonify({'error': f'No demand history for {sku_id}'}), 404
+
+            current_stock = 0
+            warehouse_ids = queries.get_all_warehouse_ids()
+            for wh in warehouse_ids:
+                current_stock += queries.get_current_stock(sku_id, wh)
+
+            from backend.forecasting import forecast_demand
+
+            # Current forecast (baseline)
+            before = forecast_demand(sku_id, demand_history)
+
+            # Simulated forecast (demand spike: multiply units_sold)
+            spiked_history = [
+                {'date': d['date'], 'units_sold': int(d['units_sold'] * multiplier)}
+                for d in demand_history
+            ]
+            after = forecast_demand(sku_id, spiked_history)
+
+            before_days = round(current_stock / before['avg_forecasted_demand']) if before['avg_forecasted_demand'] > 0 else 999
+            after_days = round(current_stock / after['avg_forecasted_demand']) if after['avg_forecasted_demand'] > 0 else 999
+
+            return jsonify({
+                'scenario': 'demand_spike',
+                'sku_id': sku_id,
+                'multiplier': multiplier,
+                'current_stock': current_stock,
+                'before': {
+                    'avg_daily_demand': round(before['avg_forecasted_demand'], 1),
+                    'trend': before['trend'],
+                    'days_until_stockout': before_days,
+                    'confidence': before['confidence'],
+                },
+                'after': {
+                    'avg_daily_demand': round(after['avg_forecasted_demand'], 1),
+                    'trend': after['trend'],
+                    'days_until_stockout': after_days,
+                    'confidence': after['confidence'],
+                },
+                'impact': {
+                    'demand_increase_units': round(after['avg_forecasted_demand'] - before['avg_forecasted_demand'], 1),
+                    'stockout_days_lost': before_days - after_days,
+                    'severity': 'critical' if after_days < 7 else 'high' if after_days < 14 else 'medium',
+                }
+            })
+
+        elif scenario_type == 'supplier_delay':
+            supplier_id = data.get('supplier_id')
+            lead_time_multiplier = float(data.get('multiplier', 2.0))
+            if not supplier_id:
+                return jsonify({'error': 'supplier_id required'}), 400
+
+            delivery_history = queries.get_supplier_delivery_history(supplier_id)
+            if not delivery_history:
+                return jsonify({'error': f'No delivery history for {supplier_id}'}), 404
+
+            from backend.suppliers import supplier_risk_score
+
+            # Current risk (baseline)
+            before = supplier_risk_score(supplier_id, delivery_history)
+
+            # Simulate worsened delivery: shift all actual_dates later by multiplier
+            from datetime import datetime, timedelta
+            simulated_history = []
+            for record in delivery_history:
+                new_record = dict(record)
+                if new_record.get('actual_date'):
+                    try:
+                        promised = datetime.strptime(new_record['promised_date'], '%Y-%m-%d')
+                        actual = datetime.strptime(new_record['actual_date'], '%Y-%m-%d')
+                        current_delay = max(0, (actual - promised).days)
+                        extra_delay = int(current_delay * (lead_time_multiplier - 1)) + int(lead_time_multiplier * 3)
+                        new_actual = actual + timedelta(days=extra_delay)
+                        new_record['actual_date'] = new_actual.strftime('%Y-%m-%d')
+                    except Exception:
+                        pass
+                simulated_history.append(new_record)
+
+            after = supplier_risk_score(supplier_id, simulated_history)
+
+            return jsonify({
+                'scenario': 'supplier_delay',
+                'supplier_id': supplier_id,
+                'multiplier': lead_time_multiplier,
+                'before': {
+                    'score': round(before['score'], 1) if before['score'] else None,
+                    'risk_category': before['risk_category'],
+                    'on_time_pct': round(before['breakdown']['on_time_delivery_pct'] or 0, 1),
+                },
+                'after': {
+                    'score': round(after['score'], 1) if after['score'] else None,
+                    'risk_category': after['risk_category'],
+                    'on_time_pct': round(after['breakdown']['on_time_delivery_pct'] or 0, 1),
+                },
+                'impact': {
+                    'score_drop': round((before['score'] or 0) - (after['score'] or 0), 1),
+                    'risk_escalated': before['risk_category'] != after['risk_category'],
+                    'new_risk_level': after['risk_category'],
+                    'severity': 'critical' if (after['score'] or 100) < 30 else 'high' if (after['score'] or 100) < 50 else 'medium',
+                }
+            })
+
+        else:
+            return jsonify({'error': f'Unknown scenario type: {scenario_type}'}), 400
+
+    except Exception as e:
+        logger.error(f'Simulation failed: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
 # WAREHOUSES (read-only, used for dropdowns)
 # ============================================================================
 
