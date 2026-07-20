@@ -1559,16 +1559,6 @@ const DashboardPage = () => {
                         <span>{w.total_stock?.toLocaleString()} units stored</span>
                         <span>cap: {w.capacity?.toLocaleString()}</span>
                       </div>
-
-                      {s.risk_level === 'critical' && (
-                        <button onClick={() => setResolvingSku(s)} style={{
-                          marginTop: 8, width: '100%', padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)',
-                          color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6,
-                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-                        }}>
-                          ⚡ Auto-Resolve
-                        </button>
-                      )}
                     </div>
                   );
 
@@ -1617,16 +1607,6 @@ const DashboardPage = () => {
                         <span>avg {fc.avg_forecasted_demand} units/day</span>
                         <span style={{ color: fc.confidence >= 0.7 ? '#4ade80' : '#ca8a04' }}>conf {Math.round(fc.confidence * 100)}%</span>
                       </div>
-
-                      {s.risk_level === 'critical' && (
-                        <button onClick={() => setResolvingSku(s)} style={{
-                          marginTop: 8, width: '100%', padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)',
-                          color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6,
-                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-                        }}>
-                          ⚡ Auto-Resolve
-                        </button>
-                      )}
                     </div>
                   );
 
