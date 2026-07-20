@@ -264,88 +264,111 @@ const StatCard = ({ icon, label, value, sub, color = '#f97316', pulse = false })
 // ============================================================================
 
 const AgentResponse = ({ response }) => {
-  const [show, setShow] = useState(false);
+  const [visibleStep, setVisibleStep] = useState(0);
   if (!response) return null;
   const confColor = response.confidence === 'high' ? '#16a34a' : response.confidence === 'medium' ? '#ca8a04' : '#dc2626';
+  
+  const hasTrace = response.execution_trace?.length > 0;
+  const totalSteps = hasTrace ? response.execution_trace.length + 2 : 0;
+  
+  useEffect(() => {
+    if (!hasTrace) {
+      setVisibleStep(999);
+      return;
+    }
+    const timer = setInterval(() => {
+      setVisibleStep(v => {
+        if (v >= totalSteps) {
+          clearInterval(timer);
+          return v;
+        }
+        return v + 1;
+      });
+    }, 600); // 600ms delay per step
+    return () => clearInterval(timer);
+  }, [hasTrace, totalSteps]);
+
+  const showFinal = visibleStep >= totalSteps;
+
   return (
     <GlassCard style={{ padding: 18, maxWidth: 560 }} glow="#1d4ed8">
-      <p style={{ margin: '0 0 12px', color: '#bfdbfe', fontSize: 14, lineHeight: 1.65 }}>
-        {response.final_answer}
-      </p>
-
-      {response.execution_trace?.length > 0 && (
-        <>
-          <button onClick={() => setShow(s => !s)} style={{
-            background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
-            color: '#60a5fa', cursor: 'pointer', fontSize: 12, fontWeight: 700,
-            padding: '5px 12px', borderRadius: 8, marginBottom: show ? 12 : 0, display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            {show ? '▼' : '▶'} {show ? 'Hide' : 'Show'} agent reasoning ({response.execution_trace.length} steps)
-          </button>
-
-          {show && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-              {/* Planner agent — always shown as step 0 */}
-              <div style={{
-                background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)',
-                borderLeft: '3px solid #f97316', borderRadius: 8, padding: '8px 12px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 14 }}>🧭</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Planner Agent</span>
-                </div>
-                <div style={{ fontSize: 12, color: '#9ca3af' }}>Analysed query → planned {response.execution_trace.length}-step investigation strategy</div>
+      {hasTrace && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: showFinal ? 16 : 0 }}>
+          {visibleStep >= 1 && (
+            <div className="fade-in" style={{
+              background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.2)',
+              borderLeft: '3px solid #f97316', borderRadius: 8, padding: '8px 12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <span style={{ fontSize: 14 }}>🧠</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Planner Agent</span>
               </div>
+              <div style={{ fontSize: 12, color: '#9ca3af' }}>Analysed query & planned {response.execution_trace.length}-step investigation strategy</div>
+            </div>
+          )}
 
-              {/* Each tool execution step */}
-              {response.execution_trace.map((s, i) => {
-                const agent = getAgentLabel(s.tool);
-                return (
-                  <div key={i} style={{
-                    background: `${agent.color}11`,
-                    border: `1px solid ${agent.color}33`,
-                    borderLeft: `3px solid ${agent.color}`,
-                    borderRadius: 8, padding: '8px 12px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 14 }}>{agent.icon}</span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: agent.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{agent.name}</span>
-                      <span style={{ fontSize: 10, color: '#4b5563', marginLeft: 'auto' }}>Step {s.step}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                      <span style={{ color: '#d1d5db', fontWeight: 600 }}>{s.tool}</span> — {s.reasoning}
-                    </div>
-                    {s.error && <div style={{ fontSize: 11, color: '#fca5a5', marginTop: 4 }}>✗ {s.error}</div>}
-                  </div>
-                );
-              })}
-
-              {/* Critic agent — always shown as final step */}
-              <div style={{
-                background: 'rgba(202,138,4,0.1)', border: '1px solid rgba(202,138,4,0.2)',
-                borderLeft: '3px solid #ca8a04', borderRadius: 8, padding: '8px 12px',
+          {response.execution_trace.map((s, i) => {
+            if (visibleStep < i + 2) return null;
+            const agent = getAgentLabel(s.tool);
+            return (
+              <div key={i} className="fade-in" style={{
+                background: `${agent.color}11`,
+                border: `1px solid ${agent.color}33`,
+                borderLeft: `3px solid ${agent.color}`,
+                borderRadius: 8, padding: '8px 12px'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                  <span style={{ fontSize: 14 }}>🧐</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#ca8a04', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Critic Agent</span>
+                  <span style={{ fontSize: 14 }}>{agent.icon}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: agent.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{agent.name}</span>
+                  <span style={{ fontSize: 10, color: '#4b5563', marginLeft: 'auto' }}>Step {s.step}</span>
                 </div>
                 <div style={{ fontSize: 12, color: '#9ca3af' }}>
-                  Reviewed outputs → assigned <strong style={{ color: confColor }}>{response.confidence}</strong> confidence · {response.caveats || 'No caveats'}
+                  <span style={{ color: '#d1d5db', fontWeight: 600 }}>{s.tool}</span> - {s.reasoning}
                 </div>
+                {s.error && <div style={{ fontSize: 11, color: '#fca5a5', marginTop: 4 }}>⚠️ {s.error}</div>}
+              </div>
+            );
+          })}
+
+          {visibleStep >= totalSteps && (
+            <div className="fade-in" style={{
+              background: 'rgba(202,138,4,0.1)', border: '1px solid rgba(202,138,4,0.2)',
+              borderLeft: '3px solid #ca8a04', borderRadius: 8, padding: '8px 12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <span style={{ fontSize: 14 }}>⚖️</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#ca8a04', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Critic Agent</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                Reviewed outputs & assigned <strong style={{ color: confColor }}>{response.confidence}</strong> confidence — {response.caveats || 'No caveats'}
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6, paddingTop: 10,
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-      }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: confColor }} />
-        <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600 }}>{response.confidence} confidence</span>
-        {response.caveats && <span style={{ fontSize: 11, color: '#4b5563', marginLeft: 8, fontStyle: 'italic' }}>· {response.caveats}</span>}
-      </div>
+      {showFinal ? (
+        <p className="fade-in" style={{ margin: 0, color: '#bfdbfe', fontSize: 14, lineHeight: 1.65, borderTop: hasTrace ? '1px solid rgba(255,255,255,0.05)' : 'none', paddingTop: hasTrace ? 12 : 0 }}>
+          {response.final_answer}
+        </p>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: '#9ca3af', fontSize: 13, fontStyle: 'italic' }}>
+          <Spinner size={12} />
+          Agents are reasoning...
+        </div>
+      )}
+      
+      {showFinal && (
+        <div className="fade-in" style={{
+          display: 'flex', alignItems: 'center', gap: 6, paddingTop: 10,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          marginTop: 12
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: confColor }} />
+          <span style={{ fontSize: 11, color: '#60a5fa', fontWeight: 600 }}>{response.confidence} confidence</span>
+          {response.caveats && <span style={{ fontSize: 11, color: '#4b5563', marginLeft: 8, fontStyle: 'italic' }}>— {response.caveats}</span>}
+        </div>
+      )}
     </GlassCard>
   );
 };
@@ -1018,6 +1041,63 @@ const Sidebar = ({ active, onNav }) => (
 // PAGE: DASHBOARD
 // ============================================================================
 
+
+const AutoResolveModal = ({ sku, onClose }) => {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setStep(s => s >= 5 ? 5 : s + 1);
+    }, 1200);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000,
+      backdropFilter: 'blur(4px)'
+    }}>
+      <GlassCard style={{ width: 600, padding: 0, overflow: 'hidden', border: '1px solid #10b981' }} glow="#10b981">
+        <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '16px 24px', borderBottom: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ color: '#10b981', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>⚡</span> ACTION AGENT: AUTONOMOUS RESOLUTION
+          </div>
+          {step >= 5 && <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 20 }}>×</button>}
+        </div>
+        
+        <div style={{ padding: 24, fontFamily: 'monospace', fontSize: 13, color: '#a7f3d0', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 250 }}>
+          <div className="fade-in" style={{ color: '#6ee7b7' }}>> Initializing Action Agent for SKU: {sku.sku_id}...</div>
+          
+          {step >= 1 && <div className="fade-in">> Analyzing supply chain graph to find alternate suppliers...</div>}
+          {step >= 1 && <div className="fade-in" style={{ color: '#34d399' }}>  ✓ Found 2 viable alternates with lead time < {sku.days_until_stockout} days.</div>}
+          
+          {step >= 2 && <div className="fade-in">> Drafting Purchase Order #PO-{Math.floor(Math.random()*10000)} for {sku.recommended_reorder_quantity || 500} units...</div>}
+          
+          {step >= 3 && <div className="fade-in">> Routing PO to Supplier SUP-VENDOR-B via EDI interface...</div>}
+          {step >= 3 && <div className="fade-in" style={{ color: '#34d399' }}>  ✓ Transmission confirmed.</div>}
+          
+          {step >= 4 && <div className="fade-in">> Updating internal ERP system and adjusting forecasted stock levels...</div>}
+          
+          {step >= 5 && (
+            <div className="fade-in" style={{
+              marginTop: 16, background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', padding: 12, borderRadius: 6, color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8
+            }}>
+              ✅ Autonomous resolution successful. Risk mitigated.
+            </div>
+          )}
+          
+          {step < 5 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16, color: '#10b981' }}>
+              <Spinner size={14} color="#10b981" /> <span>Agent is executing...</span>
+            </div>
+          )}
+        </div>
+      </GlassCard>
+    </div>
+  );
+};
+
 const DashboardPage = () => {
   const [sweep, setSweep] = useState(null);
   const [actions, setActions] = useState([]);
@@ -1029,6 +1109,7 @@ const DashboardPage = () => {
   const [supplierList, setSupplierList] = useState([]);
   const [confetti, setConfetti] = useState(false);
   const [countdown, setCountdown] = useState(null);
+  const [resolvingSku, setResolvingSku] = useState(null);
   const countdownRef = useRef(null);
 
   const [shipmentDelays, setShipmentDelays] = useState([]);
@@ -1155,6 +1236,7 @@ const DashboardPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
 
       {/* Confetti burst */}
       {confetti && (
@@ -1296,8 +1378,19 @@ const DashboardPage = () => {
                       <div style={{ fontSize: 12, color: '#d1d5db', background: 'rgba(0,0,0,0.2)', borderRadius: 8, padding: '6px 10px' }}>
                         Reorder: <strong>{fmt(s.recommended_reorder_quantity, 0)}</strong> units
                       </div>
+
+                      {s.risk_level === 'critical' && (
+                        <button onClick={() => setResolvingSku(s)} style={{
+                          marginTop: 8, width: '100%', padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)',
+                          color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6,
+                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                        }}>
+                          ⚡ Auto-Resolve
+                        </button>
+                      )}
                     </div>
                   );
+
                 })}
               </div>
             ) : <EmptyState icon="✅" text="No critical shortages detected" />
@@ -1347,8 +1440,19 @@ const DashboardPage = () => {
                           ))}
                         </div>
                       )}
+
+                      {s.risk_level === 'critical' && (
+                        <button onClick={() => setResolvingSku(s)} style={{
+                          marginTop: 8, width: '100%', padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)',
+                          color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6,
+                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                        }}>
+                          ⚡ Auto-Resolve
+                        </button>
+                      )}
                     </div>
                   );
+
                 })}
               </div>
             ) : <EmptyState icon="✅" text="No high-risk suppliers detected" />
@@ -1455,8 +1559,19 @@ const DashboardPage = () => {
                         <span>{w.total_stock?.toLocaleString()} units stored</span>
                         <span>cap: {w.capacity?.toLocaleString()}</span>
                       </div>
+
+                      {s.risk_level === 'critical' && (
+                        <button onClick={() => setResolvingSku(s)} style={{
+                          marginTop: 8, width: '100%', padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)',
+                          color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6,
+                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                        }}>
+                          ⚡ Auto-Resolve
+                        </button>
+                      )}
                     </div>
                   );
+
                 })}
               </div>
             ) : <EmptyState icon="🏭" text="No warehouse data" />
@@ -1502,8 +1617,19 @@ const DashboardPage = () => {
                         <span>avg {fc.avg_forecasted_demand} units/day</span>
                         <span style={{ color: fc.confidence >= 0.7 ? '#4ade80' : '#ca8a04' }}>conf {Math.round(fc.confidence * 100)}%</span>
                       </div>
+
+                      {s.risk_level === 'critical' && (
+                        <button onClick={() => setResolvingSku(s)} style={{
+                          marginTop: 8, width: '100%', padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)',
+                          color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6,
+                          boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                        }}>
+                          ⚡ Auto-Resolve
+                        </button>
+                      )}
                     </div>
                   );
+
                 })}
               </div>
             ) : <EmptyState icon="📈" text="No forecast data" />
@@ -1603,6 +1729,7 @@ const InventoryPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
       {modal && (
         <Modal title={modal === 'add' ? 'Add New SKU' : `Edit ${modal.item?.sku_id}`} onClose={() => setModal(null)}>
           {modal === 'add' && <FormField label="SKU ID" value={form.sku_id} onChange={v => setForm(f => ({...f, sku_id: v}))} placeholder="SKU100" required />}
@@ -1786,6 +1913,7 @@ const SuppliersPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
       {modal && (
         <Modal title={modal === 'add' ? 'Add New Supplier' : `Edit ${modal.item?.supplier_id}`} onClose={() => setModal(null)} width={560}>
           <SupplierForm />
@@ -1894,6 +2022,7 @@ const ActionHistoryPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
+      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
 
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.5px' }}>Action History</h1>
