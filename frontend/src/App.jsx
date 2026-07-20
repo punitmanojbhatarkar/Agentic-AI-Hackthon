@@ -1729,7 +1729,6 @@ const InventoryPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
       {modal && (
         <Modal title={modal === 'add' ? 'Add New SKU' : `Edit ${modal.item?.sku_id}`} onClose={() => setModal(null)}>
           {modal === 'add' && <FormField label="SKU ID" value={form.sku_id} onChange={v => setForm(f => ({...f, sku_id: v}))} placeholder="SKU100" required />}
@@ -1913,7 +1912,6 @@ const SuppliersPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
       {modal && (
         <Modal title={modal === 'add' ? 'Add New Supplier' : `Edit ${modal.item?.supplier_id}`} onClose={() => setModal(null)} width={560}>
           <SupplierForm />
@@ -2022,7 +2020,6 @@ const ActionHistoryPage = () => {
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
-      {resolvingSku && <AutoResolveModal sku={resolvingSku} onClose={() => setResolvingSku(null)} />}
 
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.5px' }}>Action History</h1>
