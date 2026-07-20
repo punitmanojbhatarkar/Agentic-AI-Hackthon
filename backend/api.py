@@ -360,12 +360,15 @@ def server_error(error):
     return jsonify({"error": "Internal server error", "message": str(error)}), 500
 
 
+import os
+
 if __name__ == '__main__':
     print("\n" + "="*60)
     print("[START] SupplySense Backend API Server")
     print("="*60)
-    print("[INFO] Running on http://localhost:5000")
+    port = int(os.environ.get("PORT", 5000))
+    print(f"[INFO] Running on http://0.0.0.0:{port}")
     print("[OK] Dashboard available on frontend")
     print("\n   Press Ctrl+C to stop")
     print("="*60 + "\n")
-    app.run(debug=True, host='127.0.0.1', port=5000, use_reloader=False)
+    app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False)
