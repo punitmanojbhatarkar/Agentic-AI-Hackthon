@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // ============================================================================
 // CONFIG & UTILITIES
@@ -455,6 +455,7 @@ const ChatInterface = () => {
       }}>
         <input value={input} onChange={e => setInput(e.target.value)} disabled={loading}
           placeholder="What is causing today's biggest disruption?"
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }}}
           style={{
             flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: 10, color: '#f1f5f9', padding: '11px 16px', fontSize: 14, outline: 'none',
@@ -463,7 +464,7 @@ const ChatInterface = () => {
           onFocus={e => e.target.style.borderColor = '#f97316'}
           onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
         />
-        <Btn disabled={!input.trim()} loading={loading}>Send</Btn>
+        <Btn disabled={!input.trim()} loading={loading}>Send ↵</Btn>
       </form>
     </GlassCard>
   );
@@ -733,6 +734,212 @@ const ActivityFeed = ({ sweep, shipmentDelays, demandForecast }) => {
   );
 };
 
+
+// ============================================================================
+// SUPPLY CHAIN NETWORK MAP (SVG)
+// ============================================================================
+
+const NetworkMap = ({ sweep, loading }) => {
+  const [tooltip, setTooltip] = useState(null);
+
+  // Build node + edge data from sweep
+  const { suppliers, warehouses, skus, edges } = useMemo(() => {
+    if (!sweep) return { suppliers: [], warehouses: [], skus: [], edges: [] };
+
+    const riskySups = sweep.risky_suppliers || [];
+    const stockouts = sweep.critical_stockouts || [];
+
+    const supplierIds = [...new Set(riskySups.map(s => s.supplier_id))].slice(0, 6);
+    const warehouseIds = [...new Set(stockouts.map(s => s.warehouse_id))].slice(0, 4);
+    const skuIds = [...new Set(stockouts.map(s => s.sku_id))].slice(0, 6);
+
+    const sups = supplierIds.map(id => {
+      const data = riskySups.find(s => s.supplier_id === id);
+      return { id, risk: data?.risk_category || 'low', score: data?.score };
+    });
+
+    const whs = warehouseIds.map(id => ({ id }));
+
+    const skuNodes = skuIds.map(id => {
+      const data = stockouts.find(s => s.sku_id === id);
+      return { id, risk: data?.risk_level || 'low', days: data?.days_until_stockout };
+    });
+
+    // Generate edges: each supplier → each warehouse → each sku
+    const edgesArr = [];
+    sups.forEach((s, si) => {
+      whs.forEach((w, wi) => {
+        if ((si + wi) % 2 === 0 || si === 0) {
+          edgesArr.push({ from: `s_${si}`, to: `w_${wi}`, risk: s.risk });
+        }
+      });
+    });
+    whs.forEach((w, wi) => {
+      skuNodes.forEach((sk, ski) => {
+        if ((wi + ski) % 2 === 0 || wi === 0) {
+          edgesArr.push({ from: `w_${wi}`, to: `sk_${ski}`, risk: sk.risk });
+        }
+      });
+    });
+
+    return { suppliers: sups, warehouses: whs, skus: skuNodes, edges: edgesArr };
+  }, [sweep]);
+
+  if (loading || (suppliers.length === 0 && warehouses.length === 0 && skus.length === 0)) {
+    return (
+      <GlassCard style={{ padding: 24, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 16px', color: '#f1f5f9', fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+          🗺️ Supply Chain Network Map
+          <span style={{ fontSize: 11, color: '#4b5563', fontWeight: 500 }}>Run a sweep to see live network</span>
+        </h3>
+        {loading ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#6b7280', padding: '40px 0', justifyContent: 'center' }}>
+            <Spinner /><span>Building network graph…</span>
+          </div>
+        ) : <EmptyState icon="🗺️" text="No network data yet — run a sweep first" />}
+      </GlassCard>
+    );
+  }
+
+  const W = 900, H = 340;
+  const col = { suppliers: 120, warehouses: W / 2, skus: W - 120 };
+  const nodeR = 28;
+
+  const getY = (index, total) => (H / (total + 1)) * (index + 1);
+
+  const nodePos = {};
+  suppliers.forEach((s, i) => { nodePos[`s_${i}`] = { x: col.suppliers, y: getY(i, suppliers.length), label: s.id, risk: s.risk, type: 'supplier', score: s.score }; });
+  warehouses.forEach((w, i) => { nodePos[`w_${i}`] = { x: col.warehouses, y: getY(i, warehouses.length), label: w.id, risk: 'medium', type: 'warehouse' }; });
+  skus.forEach((s, i) => { nodePos[`sk_${i}`] = { x: col.skus, y: getY(i, skus.length), label: s.id, risk: s.risk, type: 'sku', days: s.days }; });
+
+  const nodeColor = (risk, type) => {
+    if (type === 'warehouse') return '#2563eb';
+    return getRiskColor(risk);
+  };
+
+  return (
+    <GlassCard style={{ padding: 24, marginBottom: 24 }} glow="#2563eb">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <h3 style={{ margin: 0, color: '#f1f5f9', fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+          🗺️ Supply Chain Network Map
+          <span style={{ fontSize: 11, background: 'rgba(37,99,235,0.2)', color: '#60a5fa', padding: '2px 8px', borderRadius: 6, fontWeight: 700 }}>LIVE</span>
+        </h3>
+        <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#6b7280' }}>
+          {[['#dc2626','Critical'],['#ea580c','High'],['#ca8a04','Medium'],['#16a34a','Low'],['#2563eb','Warehouse']].map(([c,l]) => (
+            <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'inline-block' }} />{l}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-around', marginBottom: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <span style={{ color: '#f97316' }}>Suppliers</span>
+        <span style={{ color: '#2563eb' }}>Warehouses</span>
+        <span style={{ color: '#7c3aed' }}>SKUs at Risk</span>
+      </div>
+
+      <div style={{ position: 'relative', overflowX: 'auto' }}>
+        <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', fontFamily: 'Inter, sans-serif' }}>
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+              <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          {/* Edges */}
+          {edges.map((e, i) => {
+            const from = nodePos[e.from];
+            const to = nodePos[e.to];
+            if (!from || !to) return null;
+            const color = getRiskColor(e.risk);
+            const isCritical = e.risk === 'critical' || e.risk === 'high';
+            const mx = (from.x + to.x) / 2;
+            return (
+              <g key={i}>
+                <path
+                  d={`M ${from.x + nodeR} ${from.y} C ${mx} ${from.y}, ${mx} ${to.y}, ${to.x - nodeR} ${to.y}`}
+                  stroke={color} strokeWidth={isCritical ? 2.5 : 1.5} fill="none"
+                  strokeOpacity={isCritical ? 0.7 : 0.35}
+                  strokeDasharray={isCritical ? '8 4' : 'none'}
+                  style={isCritical ? { animation: 'flowPulse 1.5s linear infinite' } : {}}
+                />
+                {isCritical && (
+                  <path
+                    d={`M ${from.x + nodeR} ${from.y} C ${mx} ${from.y}, ${mx} ${to.y}, ${to.x - nodeR} ${to.y}`}
+                    stroke={color} strokeWidth={4} fill="none" strokeOpacity={0.12}
+                  />
+                )}
+              </g>
+            );
+          })}
+
+          {/* Nodes */}
+          {Object.entries(nodePos).map(([key, node]) => {
+            const color = nodeColor(node.risk, node.type);
+            const isCritical = node.risk === 'critical';
+            const isHovered = tooltip?.key === key;
+            return (
+              <g key={key} className="network-node"
+                onMouseEnter={e => setTooltip({ key, node, x: e.clientX, y: e.clientY })}
+                onMouseLeave={() => setTooltip(null)}
+                style={{ cursor: 'pointer' }}
+              >
+                {/* Glow ring for critical */}
+                {isCritical && (
+                  <circle cx={node.x} cy={node.y} r={nodeR + 8} fill={`${color}18`}
+                    stroke={`${color}44`} strokeWidth={1}
+                    style={{ animation: 'subtlePulse 2s infinite' }}
+                  />
+                )}
+                {/* Node background */}
+                <circle cx={node.x} cy={node.y} r={nodeR} fill={`${color}22`}
+                  stroke={color} strokeWidth={isHovered ? 3 : 2}
+                  style={{ transition: 'all 0.2s', filter: isHovered ? `drop-shadow(0 0 8px ${color})` : 'none' }}
+                />
+                {/* Node icon */}
+                <text x={node.x} y={node.y - 6} textAnchor="middle" fontSize="16" dominantBaseline="middle" style={{ userSelect: 'none' }}>
+                  {node.type === 'supplier' ? '🏭' : node.type === 'warehouse' ? '🏢' : '📦'}
+                </text>
+                {/* Node label */}
+                <text x={node.x} y={node.y + 14} textAnchor="middle" fontSize="8" fill={color} fontWeight="700" style={{ userSelect: 'none' }}>
+                  {node.label?.length > 7 ? node.label.slice(0, 7) : node.label}
+                </text>
+                {/* Days remaining badge for SKUs */}
+                {node.type === 'sku' && node.days != null && (
+                  <g>
+                    <rect x={node.x + 14} y={node.y - 40} width={32} height={16} rx={8} fill={color} />
+                    <text x={node.x + 30} y={node.y - 32} textAnchor="middle" fontSize="9" fill="#fff" fontWeight="800">{node.days}d</text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* SVG Tooltip */}
+        {tooltip && (
+          <div style={{
+            position: 'fixed', top: tooltip.y - 60, left: tooltip.x + 10,
+            background: '#1a1f2e', border: `1px solid ${nodeColor(tooltip.node.risk, tooltip.node.type)}55`,
+            borderRadius: 10, padding: '8px 14px', fontSize: 12, color: '#f1f5f9',
+            pointerEvents: 'none', zIndex: 9999,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}>
+            <strong style={{ color: nodeColor(tooltip.node.risk, tooltip.node.type) }}>{tooltip.node.label}</strong>
+            <div style={{ color: '#9ca3af', marginTop: 2 }}>
+              {tooltip.node.type === 'supplier' && `Risk: ${tooltip.node.risk?.toUpperCase()} · Score: ${tooltip.node.score?.toFixed(1) ?? '—'}`}
+              {tooltip.node.type === 'warehouse' && 'Distribution hub'}
+              {tooltip.node.type === 'sku' && `Risk: ${tooltip.node.risk?.toUpperCase()} · ${tooltip.node.days}d until stockout`}
+            </div>
+          </div>
+        )}
+      </div>
+    </GlassCard>
+  );
+};
+
 // ============================================================================
 // SIDEBAR NAVIGATION
 // ============================================================================
@@ -820,6 +1027,9 @@ const DashboardPage = () => {
   const [expandedSup, setExpandedSup] = useState(null);
   const [skuList, setSkuList] = useState([]);
   const [supplierList, setSupplierList] = useState([]);
+  const [confetti, setConfetti] = useState(false);
+  const [countdown, setCountdown] = useState(null);
+  const countdownRef = useRef(null);
 
   const [shipmentDelays, setShipmentDelays] = useState([]);
   const [warehouseUtil, setWarehouseUtil] = useState([]);
@@ -863,30 +1073,155 @@ const DashboardPage = () => {
     } catch (e) { /* silent */ }
   }, []);
 
+  // Auto-refresh every 60 seconds with countdown ring
   useEffect(() => {
     fetchSweep(); fetchActions(); fetchPanels(); fetchLists();
+    setCountdown(60);
   }, [fetchSweep, fetchActions, fetchPanels, fetchLists]);
+
+  useEffect(() => {
+    countdownRef.current = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          fetchSweep();
+          return 60;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(countdownRef.current);
+  }, [fetchSweep]);
+
+  const triggerConfetti = () => {
+    setConfetti(true);
+    setTimeout(() => setConfetti(false), 2800);
+  };
 
   const handleAction = async (id, status) => {
     try {
       await api(`/pending-actions/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
       setActions(prev => prev.filter(a => a.action_id !== id));
-      setToast({ msg: status === 'approved' ? '✓ Action approved' : '✗ Action rejected', type: status === 'approved' ? 'success' : 'error' });
+      if (status === 'approved') triggerConfetti();
+      setToast({ msg: status === 'approved' ? '🎉 Action approved & executed!' : '✗ Action rejected', type: status === 'approved' ? 'success' : 'error' });
     } catch (e) { setToast({ msg: e.message, type: 'error' }); }
   };
 
   const stats = sweep?.scan_stats || {};
+  const criticalCount = stats.critical_count || 0;
+  const totalRiskValue = useMemo(() => {
+    if (!sweep?.critical_stockouts) return 0;
+    return sweep.critical_stockouts.reduce((sum, s) => {
+      const price = getUnitPrice(s.category);
+      return sum + Math.round((s.recommended_reorder_quantity || 0) * price);
+    }, 0);
+  }, [sweep]);
+
+  const exportReport = () => {
+    const lines = [
+      '═══════════════════════════════════════════',
+      ' SUPPLYSENSE — INTELLIGENCE REPORT',
+      ` Generated: ${new Date().toLocaleString()}`,
+      '═══════════════════════════════════════════',
+      '',
+      `Critical Stockouts: ${stats.critical_count ?? 0}`,
+      `High-Risk SKUs:     ${stats.high_count ?? 0}`,
+      `Risky Suppliers:    ${stats.risky_supplier_count ?? 0}`,
+      `Total Revenue at Risk: $${totalRiskValue.toLocaleString()}`,
+      '',
+      '── EXECUTIVE SUMMARY ──────────────────────',
+      sweep?.executive_summary || 'No summary available.',
+      '',
+      '── CRITICAL STOCKOUTS ──────────────────────',
+      ...(sweep?.critical_stockouts?.map(s =>
+        `• ${s.sku_id} @ ${s.warehouse_id}: ${s.days_until_stockout}d remaining [${s.risk_level?.toUpperCase()}]`
+      ) || ['None']),
+      '',
+      '── HIGH-RISK SUPPLIERS ─────────────────────',
+      ...(sweep?.risky_suppliers?.map(s =>
+        `• ${s.supplier_id}: Score ${s.score?.toFixed(1)} [${s.risk_category?.toUpperCase()}]`
+      ) || ['None']),
+      '',
+      '═══════════════════════════════════════════',
+      ' Powered by SupplySense Agentic AI v2.0',
+      '═══════════════════════════════════════════',
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `supplysense-report-${Date.now()}.txt`;
+    a.click(); URL.revokeObjectURL(url);
+  };
 
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
 
+      {/* Confetti burst */}
+      {confetti && (
+        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9998, overflow: 'hidden' }}>
+          {[...Array(60)].map((_, i) => (
+            <div key={i} style={{
+              position: 'absolute',
+              left: `${Math.random() * 100}%`,
+              top: `-10px`,
+              width: `${6 + Math.random() * 8}px`,
+              height: `${6 + Math.random() * 8}px`,
+              borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+              background: ['#f97316','#7c3aed','#16a34a','#2563eb','#fbbf24','#ec4899'][Math.floor(Math.random()*6)],
+              animation: `confettiFall ${1.5 + Math.random() * 2}s ${Math.random() * 0.8}s ease-in forwards`,
+              transform: `rotate(${Math.random()*360}deg)`,
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* Critical Alert Banner */}
+      {criticalCount > 0 && !loading && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(220,38,38,0.2), rgba(234,88,12,0.15))',
+          border: '1px solid rgba(220,38,38,0.4)',
+          borderRadius: 12, padding: '12px 20px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', gap: 12,
+          animation: 'criticalPulse 2s infinite',
+        }}>
+          <div style={{ fontSize: 22 }}>🚨</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, color: '#fca5a5', fontSize: 14 }}>
+              CRITICAL ALERT: {criticalCount} stockout{criticalCount > 1 ? 's' : ''} require immediate action
+            </div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+              Total revenue at risk: <strong style={{ color: '#fb923c' }}>${totalRiskValue.toLocaleString()}</strong> · Approve agent actions below to resolve
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 700, background: 'rgba(220,38,38,0.2)', padding: '4px 12px', borderRadius: 999 }}>URGENT</div>
+        </div>
+      )}
+
       {/* Page header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.5px' }}>Operations Dashboard</h1>
-        <p style={{ margin: '6px 0 0', color: '#4b5563', fontSize: 13 }}>
-          {sweep?.timestamp ? `Last intelligence sweep: ${fmtDate(sweep.timestamp)}` : loading ? 'Running sweep…' : 'Ready — click Refresh to run a sweep'}
-        </p>
+      <div style={{ marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: '-0.5px' }}>Operations Dashboard</h1>
+          <p style={{ margin: '6px 0 0', color: '#4b5563', fontSize: 13 }}>
+            {sweep?.timestamp ? `Last sweep: ${fmtDate(sweep.timestamp)}` : loading ? 'Running sweep…' : 'Ready'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Auto-refresh countdown ring */}
+          {countdown !== null && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={`Auto-refresh in ${countdown}s`}>
+              <svg width="32" height="32" style={{ transform: 'rotate(-90deg)' }}>
+                <circle cx="16" cy="16" r="12" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
+                <circle cx="16" cy="16" r="12" fill="none" stroke="#f97316" strokeWidth="3"
+                  strokeDasharray={`${2 * Math.PI * 12}`}
+                  strokeDashoffset={`${2 * Math.PI * 12 * (1 - countdown / 60)}`}
+                  style={{ transition: 'stroke-dashoffset 1s linear' }}
+                />
+              </svg>
+              <span style={{ fontSize: 11, color: '#4b5563' }}>{countdown}s</span>
+            </div>
+          )}
+          <Btn small variant="ghost" onClick={exportReport}>📄 Export Report</Btn>
+        </div>
       </div>
 
       {/* KPI Stat Cards */}
@@ -1182,8 +1517,13 @@ const DashboardPage = () => {
         <ActivityFeed sweep={sweep} shipmentDelays={shipmentDelays} demandForecast={demandForecast} />
       </div>
 
+      {/* Supply Chain Network Map - Full Width */}
+      <NetworkMap sweep={sweep} loading={loading} />
+
       {/* Chat */}
-      <ChatInterface />
+      <div style={{ marginTop: 24 }}>
+        <ChatInterface />
+      </div>
     </div>
   );
 };
@@ -1648,12 +1988,15 @@ export default function App() {
         body { margin: 0; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes subtlePulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; } 50% { opacity: 0.8; box-shadow: 0 0 0 4px transparent; } }
-        @keyframes criticalPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); } 50% { box-shadow: 0 0 0 4px rgba(220,38,38,0.15); } }
+        @keyframes subtlePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+        @keyframes criticalPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); } 50% { box-shadow: 0 0 12px rgba(220,38,38,0.3); } }
         @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes modalIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes confettiFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(100vh) rotate(720deg); opacity: 0; } }
+        @keyframes nodeGlow { 0%,100% { filter: drop-shadow(0 0 4px currentColor); } 50% { filter: drop-shadow(0 0 10px currentColor); } }
+        @keyframes flowPulse { 0% { stroke-dashoffset: 24; } 100% { stroke-dashoffset: 0; } }
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
@@ -1661,6 +2004,7 @@ export default function App() {
         input[type="range"] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); outline: none; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(135deg,#7c3aed,#6d28d9); cursor: pointer; box-shadow: 0 2px 8px rgba(124,58,237,0.5); }
         select option { background: #1a1f2e; }
+        .network-node:hover { filter: brightness(1.3); cursor: pointer; }
       `}</style>
 
       <Sidebar active={page} onNav={setPage} />
